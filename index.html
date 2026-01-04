@@ -3,15 +3,20 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Notion Savings Tracker</title>
+<title>Savings Tracker</title>
 
 <style>
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
 :root {
   --bg: #ffffff;
   --card: #f5f5f7;
   --text: #111;
   --muted: #666;
-  --accent: #007aff;
   --danger: #ff3b30;
   --border: rgba(0,0,0,0.1);
 }
@@ -22,8 +27,6 @@
     --card: #2c2c2e;
     --text: #ffffff;
     --muted: #aaaaaa;
-    --accent: #0a84ff;
-    --danger: #ff453a;
     --border: rgba(255,255,255,0.1);
   }
 }
@@ -45,25 +48,72 @@ body {
   background: var(--card);
   color: var(--text);
   width: 100%;
-  max-width: 320px;
+  max-width: 340px;
   border-radius: 24px;
   padding: 16px;
   border: 1px solid var(--border);
   box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+  overflow: hidden;
 }
 
-.total {
-  font-size: 28px;
-  font-weight: 700;
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.tab {
+  flex: 1;
+  padding: 8px 0;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
   text-align: center;
-  margin-bottom: 12px;
+  cursor: pointer;
+  background: var(--bg);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
+.tab.active[data-bank="gcash"] {
+  background: #0079F6;
+  color: #fff;
+  border-color: transparent;
+}
+
+.tab.active[data-bank="gotyme"] {
+  background: #0EE9F3;
+  color: #000;
+  border-color: transparent;
+}
+
+.tab.active[data-bank="maribank"] {
+  background: #E45D04;
+  color: #fff;
+  border-color: transparent;
+}
+
+/* ===== BIG SAVINGS VALUE ===== */
+.total {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.total span#total {
+  font-size: 44px;      /* 🔥 bigger number */
+  font-weight: 800;
+  letter-spacing: -0.5px;
 }
 
 .currency {
-  font-size: 14px;
+  display: block;
+  margin-top: 4px;
+  font-size: 13px;
   color: var(--muted);
 }
 
+/* Inputs */
 .input-group {
   display: flex;
   gap: 8px;
@@ -81,7 +131,6 @@ input {
 }
 
 button {
-  flex: 1;
   padding: 10px;
   border-radius: 14px;
   border: none;
@@ -91,16 +140,21 @@ button {
 }
 
 .deposit {
-  background: var(--accent);
+  flex: 1;
+  background: #007aff;
   color: #fff;
 }
 
 .withdraw {
+  flex: 1;
   background: var(--danger);
   color: #fff;
 }
 
 .undo {
+  width: 100%;
+  padding: 10px;
+  border-radius: 12px;
   background: transparent;
   border: 1px dashed var(--border);
   color: var(--muted);
@@ -110,12 +164,6 @@ button {
 .history {
   margin-top: 14px;
   font-size: 12px;
-}
-
-.history h4 {
-  margin: 0 0 6px 0;
-  color: var(--muted);
-  font-weight: 600;
 }
 
 .entry {
@@ -129,13 +177,20 @@ button {
 <body>
 
 <div class="card">
+
+  <div class="tabs">
+    <div class="tab active" data-bank="gcash">GCash</div>
+    <div class="tab" data-bank="gotyme">GoTyme</div>
+    <div class="tab" data-bank="maribank">MariBank</div>
+  </div>
+
   <div class="total">
-    ₱<span id="total">0</span><br>
-    <span class="currency">Total Savings</span>
+    ₱<span id="total">0</span>
+    <span class="currency" id="bankName">GCash</span>
   </div>
 
   <div class="input-group">
-    <input type="number" id="amount" placeholder="Amount">
+    <input type="number" id="amount">
   </div>
 
   <div class="input-group">
@@ -143,12 +198,12 @@ button {
     <button class="withdraw" id="withdrawBtn">Deduct</button>
   </div>
 
-  <button class="undo" id="undoBtn">Undo Last Entry</button>
+  <button class="undo" id="undoBtn">Undo</button>
 
   <div class="history">
-    <h4>Recent Activity</h4>
     <div id="history"></div>
   </div>
+
 </div>
 
 <script type="module">
@@ -156,7 +211,6 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebas
 import {
   getFirestore,
   doc,
-  getDoc,
   setDoc,
   updateDoc,
   onSnapshot
@@ -168,88 +222,98 @@ const firebaseConfig = {
   projectId: "notion-savings",
   storageBucket: "notion-savings.firebasestorage.app",
   messagingSenderId: "460511400300",
-  appId: "1:460511400300:web:7cac15a17b0e60d2c36349",
-  measurementId: "G-QJEB3LVBSV"
+  appId: "1:460511400300:web:7cac15a17b0e60d2c36349"
 };
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-const savingsRef = doc(db, "savings", "main");
+
+const cache = {
+  gcash: { totalSavings: 0, transactions: [] },
+  gotyme: { totalSavings: 0, transactions: [] },
+  maribank: { totalSavings: 0, transactions: [] }
+};
+
+let currentBank = "gcash";
+let unsubscribe = null;
 
 const totalEl = document.getElementById("total");
 const historyEl = document.getElementById("history");
+const bankNameEl = document.getElementById("bankName");
 const amountInput = document.getElementById("amount");
 
-async function init() {
-  const snap = await getDoc(savingsRef);
-  if (!snap.exists()) {
-    await setDoc(savingsRef, {
-      totalSavings: 0,
-      transactions: []
-    });
-  }
+function bankRef(bank) {
+  return doc(db, "savings", bank);
 }
-init();
 
-onSnapshot(savingsRef, snap => {
-  if (!snap.exists()) return;
-  const data = snap.data();
+function listenBank(bank) {
+  if (unsubscribe) unsubscribe();
+  unsubscribe = onSnapshot(bankRef(bank), snap => {
+    if (!snap.exists()) {
+      setDoc(bankRef(bank), { totalSavings: 0, transactions: [] });
+      return;
+    }
+    cache[bank] = snap.data();
+    if (bank === currentBank) render(bank);
+  });
+}
+
+function render(bank) {
+  const data = cache[bank];
   totalEl.textContent = data.totalSavings.toLocaleString();
-  renderHistory(data.transactions);
-});
-
-function renderHistory(transactions = []) {
   historyEl.innerHTML = "";
-  transactions.slice(-3).reverse().forEach(t => {
+  data.transactions.slice(-3).reverse().forEach(t => {
     const div = document.createElement("div");
     div.className = "entry";
-    div.innerHTML = `
-      <span>${t.type}</span>
-      <span>${t.amount > 0 ? "+" : ""}${t.amount}</span>
-    `;
+    div.innerHTML = `<span>${t.type}</span><span>${t.amount > 0 ? "+" : ""}${t.amount}</span>`;
     historyEl.appendChild(div);
   });
 }
 
+document.querySelectorAll(".tab").forEach(tab => {
+  tab.onclick = () => {
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    tab.classList.add("active");
+
+    currentBank = tab.dataset.bank;
+    bankNameEl.textContent = tab.textContent;
+
+    render(currentBank);
+    listenBank(currentBank);
+  };
+});
+
 async function addTransaction(amount) {
   if (!amount) return;
+  const data = cache[currentBank];
 
-  const snap = await getDoc(savingsRef);
-  const data = snap.data();
-
-  await updateDoc(savingsRef, {
+  await updateDoc(bankRef(currentBank), {
     totalSavings: data.totalSavings + amount,
-    transactions: [
-      ...data.transactions,
-      {
-        amount,
-        type: amount > 0 ? "Deposit" : "Deduction",
-        timestamp: Date.now()
-      }
-    ]
+    transactions: [...data.transactions, {
+      amount,
+      type: amount > 0 ? "Deposit" : "Deduction",
+      timestamp: Date.now()
+    }]
   });
 
   amountInput.value = "";
 }
 
-document.getElementById("depositBtn").onclick = () =>
-  addTransaction(Math.abs(Number(amountInput.value)));
+depositBtn.onclick = () => addTransaction(Math.abs(+amountInput.value));
+withdrawBtn.onclick = () => addTransaction(-Math.abs(+amountInput.value));
 
-document.getElementById("withdrawBtn").onclick = () =>
-  addTransaction(-Math.abs(Number(amountInput.value)));
-
-document.getElementById("undoBtn").onclick = async () => {
-  const snap = await getDoc(savingsRef);
-  const data = snap.data();
+undoBtn.onclick = async () => {
+  const data = cache[currentBank];
   if (!data.transactions.length) return;
+  const last = data.transactions.at(-1);
 
-  const last = data.transactions[data.transactions.length - 1];
-
-  await updateDoc(savingsRef, {
+  await updateDoc(bankRef(currentBank), {
     totalSavings: data.totalSavings - last.amount,
     transactions: data.transactions.slice(0, -1)
   });
 };
+
+["gcash","gotyme","maribank"].forEach(listenBank);
 </script>
 
 </body>
