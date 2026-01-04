@@ -9,7 +9,13 @@
 html, body {
   width: 100%;
   height: 100%;
+  margin: 0;
+  padding: 0;
   overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: var(--bg);
 }
 
 :root {
@@ -37,10 +43,7 @@ html, body {
 }
 
 body {
-  margin: 0;
   padding: 16px;
-  display: flex;
-  justify-content: center;
 }
 
 .card {
@@ -52,6 +55,8 @@ body {
   padding: 16px;
   border: 1px solid var(--border);
   box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+  display: flex;
+  flex-direction: column;
 }
 
 /* Tabs */
@@ -78,7 +83,7 @@ body {
 .tab.active[data-bank="gotyme"]{ background:#0EE9F3;color:#000;border:0 }
 .tab.active[data-bank="maribank"]{ background:#E45D04;color:#fff;border:0 }
 
-/* Big value */
+/* Total */
 .total {
   text-align: center;
   margin-bottom: 16px;
@@ -133,11 +138,16 @@ button {
 .history {
   margin-top: 14px;
   font-size: 12px;
+  flex: 1;               /* Take remaining space */
+  overflow-y: auto;      /* Scroll if too many entries */
+  max-height: 180px;     /* Optional: limit visible height */
+  padding-right: 4px;    
 }
 
 .entry {
   display: flex;
   justify-content: space-between;
+  margin-bottom: 4px;
 }
 </style>
 </head>
@@ -157,7 +167,7 @@ button {
   </div>
 
   <div class="input-group">
-    <input type="number" id="amount">
+    <input type="number" id="amount" placeholder="Enter amount">
   </div>
 
   <div class="input-group">
@@ -173,9 +183,7 @@ button {
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import {
-  getFirestore, doc, setDoc, updateDoc, onSnapshot
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, doc, setDoc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const app = initializeApp({
   apiKey: "AIzaSyAvD91Eh5wNlV8zemA2JQb5eE_qfuh5GM0",
@@ -203,7 +211,7 @@ function render(bank) {
   totalEl.textContent = d.totalSavings.toLocaleString();
   historyEl.innerHTML = "";
 
-  d.transactions.slice(-3).reverse().forEach(t => {
+  d.transactions.slice(-10).reverse().forEach(t => {
     historyEl.innerHTML +=
       `<div class="entry"><span>${t.type}</span><span>${t.amount > 0 ? "+" : ""}${t.amount}</span></div>`;
   });
