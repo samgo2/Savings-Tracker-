@@ -8,7 +8,7 @@
     margin: 0;
     padding: 16px;
     font-family: Inter, Arial, sans-serif;
-    background: #0f172a;
+    background: transparent; /* ✅ TRANSPARENT */
     color: white;
     text-align: center;
   }
@@ -60,7 +60,7 @@
 
   th, td {
     padding: 6px;
-    border-bottom: 1px solid #334155;
+    border-bottom: 1px solid rgba(255,255,255,0.15);
   }
 
   th {
@@ -150,7 +150,7 @@
       row.innerHTML = `
         <td>${entry.type}</td>
         <td>${entry.amount > 0 ? "+" : ""}₱${Math.abs(entry.amount)}</td>
-        <td>₱${entry.balance}</td>
+        <td>₱${entry.balance.toLocaleString()}</td>
       `;
       historyEl.appendChild(row);
     });
@@ -161,4 +161,3 @@
 
 </body>
 </html>
-
