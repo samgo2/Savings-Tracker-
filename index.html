@@ -37,7 +37,6 @@ html, body {
 }
 
 body {
-  background: transparent;
   margin: 0;
   padding: 16px;
   display: flex;
@@ -53,7 +52,6 @@ body {
   padding: 16px;
   border: 1px solid var(--border);
   box-shadow: 0 8px 24px rgba(0,0,0,0.08);
-  overflow: hidden;
 }
 
 /* Tabs */
@@ -76,39 +74,23 @@ body {
   border: 1px solid var(--border);
 }
 
-.tab.active[data-bank="gcash"] {
-  background: #0079F6;
-  color: #fff;
-  border-color: transparent;
-}
+.tab.active[data-bank="gcash"] { background:#0079F6;color:#fff;border:0 }
+.tab.active[data-bank="gotyme"]{ background:#0EE9F3;color:#000;border:0 }
+.tab.active[data-bank="maribank"]{ background:#E45D04;color:#fff;border:0 }
 
-.tab.active[data-bank="gotyme"] {
-  background: #0EE9F3;
-  color: #000;
-  border-color: transparent;
-}
-
-.tab.active[data-bank="maribank"] {
-  background: #E45D04;
-  color: #fff;
-  border-color: transparent;
-}
-
-/* ===== BIG SAVINGS VALUE ===== */
+/* Big value */
 .total {
   text-align: center;
   margin-bottom: 16px;
 }
 
-.total span#total {
-  font-size: 44px;      /* 🔥 bigger number */
+#total {
+  font-size: 44px;
   font-weight: 800;
-  letter-spacing: -0.5px;
 }
 
 .currency {
   display: block;
-  margin-top: 4px;
   font-size: 13px;
   color: var(--muted);
 }
@@ -127,38 +109,25 @@ input {
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--text);
-  font-size: 14px;
 }
 
 button {
   padding: 10px;
   border-radius: 14px;
   border: none;
-  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
 }
 
-.deposit {
-  flex: 1;
-  background: #007aff;
-  color: #fff;
-}
-
-.withdraw {
-  flex: 1;
-  background: var(--danger);
-  color: #fff;
-}
+.deposit { flex:1;background:#007aff;color:#fff }
+.withdraw { flex:1;background:var(--danger);color:#fff }
 
 .undo {
   width: 100%;
-  padding: 10px;
-  border-radius: 12px;
+  margin-top: 8px;
   background: transparent;
   border: 1px dashed var(--border);
   color: var(--muted);
-  margin-top: 8px;
 }
 
 .history {
@@ -169,13 +138,11 @@ button {
 .entry {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 4px;
 }
 </style>
 </head>
 
 <body>
-
 <div class="card">
 
   <div class="tabs">
@@ -200,73 +167,58 @@ button {
 
   <button class="undo" id="undoBtn">Undo</button>
 
-  <div class="history">
-    <div id="history"></div>
-  </div>
+  <div class="history" id="history"></div>
 
 </div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import {
-  getFirestore,
-  doc,
-  setDoc,
-  updateDoc,
-  onSnapshot
+  getFirestore, doc, setDoc, updateDoc, onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-const firebaseConfig = {
+const app = initializeApp({
   apiKey: "AIzaSyAvD91Eh5wNlV8zemA2JQb5eE_qfuh5GM0",
   authDomain: "notion-savings.firebaseapp.com",
-  projectId: "notion-savings",
-  storageBucket: "notion-savings.firebasestorage.app",
-  messagingSenderId: "460511400300",
-  appId: "1:460511400300:web:7cac15a17b0e60d2c36349"
-};
+  projectId: "notion-savings"
+});
 
-const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-const cache = {
-  gcash: { totalSavings: 0, transactions: [] },
-  gotyme: { totalSavings: 0, transactions: [] },
-  maribank: { totalSavings: 0, transactions: [] }
-};
-
+const cache = { gcash:null, gotyme:null, maribank:null };
 let currentBank = "gcash";
-let unsubscribe = null;
+let unsub = null;
 
 const totalEl = document.getElementById("total");
 const historyEl = document.getElementById("history");
 const bankNameEl = document.getElementById("bankName");
-const amountInput = document.getElementById("amount");
+const amountEl = document.getElementById("amount");
 
-function bankRef(bank) {
-  return doc(db, "savings", bank);
-}
+const ref = b => doc(db, "savings", b);
 
-function listenBank(bank) {
-  if (unsubscribe) unsubscribe();
-  unsubscribe = onSnapshot(bankRef(bank), snap => {
-    if (!snap.exists()) {
-      setDoc(bankRef(bank), { totalSavings: 0, transactions: [] });
-      return;
-    }
-    cache[bank] = snap.data();
-    if (bank === currentBank) render(bank);
+function render(bank) {
+  const d = cache[bank];
+  if (!d) return;
+
+  totalEl.textContent = d.totalSavings.toLocaleString();
+  historyEl.innerHTML = "";
+
+  d.transactions.slice(-3).reverse().forEach(t => {
+    historyEl.innerHTML +=
+      `<div class="entry"><span>${t.type}</span><span>${t.amount > 0 ? "+" : ""}${t.amount}</span></div>`;
   });
 }
 
-function render(bank) {
-  const data = cache[bank];
-  totalEl.textContent = data.totalSavings.toLocaleString();
-  historyEl.innerHTML = "";
-  data.transactions.slice(-3).reverse().forEach(t => {
-    const div = document.createElement("div");
-    div.className = "entry";
-    div.innerHTML = `<span>${t.type}</span><span>${t.amount > 0 ? "+" : ""}${t.amount}</span>`;
-    historyEl.appendChild(div);
+function listen(bank) {
+  if (unsub) unsub();
+
+  unsub = onSnapshot(ref(bank), snap => {
+    if (!snap.exists()) {
+      setDoc(ref(bank), { totalSavings: 0, transactions: [] });
+      return;
+    }
+    cache[bank] = snap.data();
+    render(bank);
   });
 }
 
@@ -278,42 +230,43 @@ document.querySelectorAll(".tab").forEach(tab => {
     currentBank = tab.dataset.bank;
     bankNameEl.textContent = tab.textContent;
 
-    render(currentBank);
-    listenBank(currentBank);
+    if (cache[currentBank]) render(currentBank);
+    listen(currentBank);
   };
 });
 
-async function addTransaction(amount) {
+async function add(amount) {
   if (!amount) return;
-  const data = cache[currentBank];
+  const d = cache[currentBank];
 
-  await updateDoc(bankRef(currentBank), {
-    totalSavings: data.totalSavings + amount,
-    transactions: [...data.transactions, {
+  await updateDoc(ref(currentBank), {
+    totalSavings: d.totalSavings + amount,
+    transactions: [...d.transactions, {
       amount,
       type: amount > 0 ? "Deposit" : "Deduction",
       timestamp: Date.now()
     }]
   });
 
-  amountInput.value = "";
+  amountEl.value = "";
 }
 
-depositBtn.onclick = () => addTransaction(Math.abs(+amountInput.value));
-withdrawBtn.onclick = () => addTransaction(-Math.abs(+amountInput.value));
+depositBtn.onclick = () => add(Math.abs(+amountEl.value));
+withdrawBtn.onclick = () => add(-Math.abs(+amountEl.value));
 
 undoBtn.onclick = async () => {
-  const data = cache[currentBank];
-  if (!data.transactions.length) return;
-  const last = data.transactions.at(-1);
+  const d = cache[currentBank];
+  if (!d.transactions.length) return;
+  const last = d.transactions.at(-1);
 
-  await updateDoc(bankRef(currentBank), {
-    totalSavings: data.totalSavings - last.amount,
-    transactions: data.transactions.slice(0, -1)
+  await updateDoc(ref(currentBank), {
+    totalSavings: d.totalSavings - last.amount,
+    transactions: d.transactions.slice(0, -1)
   });
 };
 
-["gcash","gotyme","maribank"].forEach(listenBank);
+/* Initial load */
+listen(currentBank);
 </script>
 
 </body>
