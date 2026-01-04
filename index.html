@@ -1,90 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Notion Savings Tracker</title>
+
+<style>
+:root {
+  --bg: #ffffff;
+  --card: #f5f5f7;
+  --text: #111;
+  --muted: #666;
+  --accent: #007aff;
+  --danger: #ff3b30;
+  --border: rgba(0,0,0,0.1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1c1e;
+    --card: #2c2c2e;
+    --text: #ffffff;
+    --muted: #aaaaaa;
+    --accent: #0a84ff;
+    --danger: #ff453a;
+    --border: rgba(255,255,255,0.1);
+  }
+}
+
+* {
+  box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+body {
+  background: transparent;
+  margin: 0;
+  padding: 16px;
+  display: flex;
+  justify-content: center;
+}
+
+.card {
+  background: var(--card);
+  color: var(--text);
+  width: 100%;
+  max-width: 320px;
+  border-radius: 24px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+}
+
+.total {
+  font-size: 28px;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+.currency {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.input-group {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+input {
+  flex: 1;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+}
+
+button {
+  flex: 1;
+  padding: 10px;
+  border-radius: 14px;
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.deposit {
+  background: var(--accent);
+  color: #fff;
+}
+
+.withdraw {
+  background: var(--danger);
+  color: #fff;
+}
+
+.undo {
+  background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--muted);
+  margin-top: 8px;
+}
+
+.history {
+  margin-top: 14px;
+  font-size: 12px;
+}
+
+.history h4 {
+  margin: 0 0 6px 0;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.entry {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="card">
+  <div class="total">
+    ₱<span id="total">0</span><br>
+    <span class="currency">Total Savings</span>
+  </div>
+
+  <div class="input-group">
+    <input type="number" id="amount" placeholder="Amount">
+  </div>
+
+  <div class="input-group">
+    <button class="deposit" id="depositBtn">Deposit</button>
+    <button class="withdraw" id="withdrawBtn">Deduct</button>
+  </div>
+
+  <button class="undo" id="undoBtn">Undo Last Entry</button>
+
+  <div class="history">
+    <h4>Recent Activity</h4>
+    <div id="history"></div>
+  </div>
+</div>
+
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-  import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  onSnapshot
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyAvD91Eh5wNlV8zemA2JQb5eE_qfuh5GM0",
-    authDomain: "notion-savings.firebaseapp.com",
-    projectId: "notion-savings",
-    storageBucket: "notion-savings.firebasestorage.app",
-    messagingSenderId: "460511400300",
-    appId: "1:460511400300:web:7cac15a17b0e60d2c36349",
-    measurementId: "G-QJEB3LVBSV"
-  };
+const firebaseConfig = {
+  apiKey: "AIzaSyAvD91Eh5wNlV8zemA2JQb5eE_qfuh5GM0",
+  authDomain: "notion-savings.firebaseapp.com",
+  projectId: "notion-savings",
+  storageBucket: "notion-savings.firebasestorage.app",
+  messagingSenderId: "460511400300",
+  appId: "1:460511400300:web:7cac15a17b0e60d2c36349",
+  measurementId: "G-QJEB3LVBSV"
+};
 
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const savingsRef = doc(db, "savings", "main");
 
-  const docRef = doc(db, "savings", "shared");
+const totalEl = document.getElementById("total");
+const historyEl = document.getElementById("history");
+const amountInput = document.getElementById("amount");
 
-  let savings = 0;
-  let history = [];
-
-  const totalEl = document.getElementById("total");
-  const inputEl = document.getElementById("amountInput");
-  const historyEl = document.getElementById("history");
-
-  async function loadData() {
-    const snap = await getDoc(docRef);
-    if (snap.exists()) {
-      const data = snap.data();
-      savings = data.savings || 0;
-      history = data.history || [];
-      render();
-    }
-  }
-
-  function saveData() {
-    setDoc(docRef, { savings, history });
-  }
-
-  function deposit() {
-    applyChange("Deposit", Number(inputEl.value));
-  }
-
-  function deduct() {
-    applyChange("Deduct", -Number(inputEl.value));
-  }
-
-  function applyChange(type, amount) {
-    if (!amount) return;
-
-    savings += amount;
-    history.push({ type, amount, balance: savings });
-    saveData();
-    inputEl.value = "";
-  }
-
-  function undo() {
-    if (!history.length) return;
-    history.pop();
-    savings = history.length ? history.at(-1).balance : 0;
-    saveData();
-  }
-
-  function render() {
-    totalEl.textContent = `₱${savings.toLocaleString()}`;
-    totalEl.className = "amount " + (savings >= 0 ? "positive" : "negative");
-
-    historyEl.innerHTML = "";
-    history.slice(-3).reverse().forEach(h => {
-      historyEl.innerHTML += `
-        <tr>
-          <td>${h.type}</td>
-          <td>${h.amount > 0 ? "+" : ""}₱${Math.abs(h.amount)}</td>
-          <td>₱${h.balance.toLocaleString()}</td>
-        </tr>`;
+async function init() {
+  const snap = await getDoc(savingsRef);
+  if (!snap.exists()) {
+    await setDoc(savingsRef, {
+      totalSavings: 0,
+      transactions: []
     });
   }
+}
+init();
 
-  onSnapshot(docRef, snap => {
-    if (snap.exists()) {
-      const data = snap.data();
-      savings = data.savings;
-      history = data.history;
-      render();
-    }
+onSnapshot(savingsRef, snap => {
+  if (!snap.exists()) return;
+  const data = snap.data();
+  totalEl.textContent = data.totalSavings.toLocaleString();
+  renderHistory(data.transactions);
+});
+
+function renderHistory(transactions = []) {
+  historyEl.innerHTML = "";
+  transactions.slice(-3).reverse().forEach(t => {
+    const div = document.createElement("div");
+    div.className = "entry";
+    div.innerHTML = `
+      <span>${t.type}</span>
+      <span>${t.amount > 0 ? "+" : ""}${t.amount}</span>
+    `;
+    historyEl.appendChild(div);
+  });
+}
+
+async function addTransaction(amount) {
+  if (!amount) return;
+
+  const snap = await getDoc(savingsRef);
+  const data = snap.data();
+
+  await updateDoc(savingsRef, {
+    totalSavings: data.totalSavings + amount,
+    transactions: [
+      ...data.transactions,
+      {
+        amount,
+        type: amount > 0 ? "Deposit" : "Deduction",
+        timestamp: Date.now()
+      }
+    ]
   });
 
-  loadData();
+  amountInput.value = "";
+}
+
+document.getElementById("depositBtn").onclick = () =>
+  addTransaction(Math.abs(Number(amountInput.value)));
+
+document.getElementById("withdrawBtn").onclick = () =>
+  addTransaction(-Math.abs(Number(amountInput.value)));
+
+document.getElementById("undoBtn").onclick = async () => {
+  const snap = await getDoc(savingsRef);
+  const data = snap.data();
+  if (!data.transactions.length) return;
+
+  const last = data.transactions[data.transactions.length - 1];
+
+  await updateDoc(savingsRef, {
+    totalSavings: data.totalSavings - last.amount,
+    transactions: data.transactions.slice(0, -1)
+  });
+};
 </script>
+
+</body>
+</html>
